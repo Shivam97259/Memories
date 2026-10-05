@@ -1,4 +1,4 @@
-import { VAULT_CONFIG } from './config.ts';
+import { VAULT_CONFIG } from './config';
 
 export interface VaultPhoto {
   name: string;
@@ -33,18 +33,32 @@ export async function fetchVaultPhotos(
   const cleanFolderPath = VAULT_CONFIG.folderPath.replace(/^\/+|\/+$/g, '');
   const contentsUrl = `https://api.github.com/repos/${VAULT_CONFIG.githubUsername}/${VAULT_CONFIG.repoName}/contents/${cleanFolderPath}?ref=${VAULT_CONFIG.branch}`;
 
-  const response = await fetch(contentsUrl, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${VAULT_CONFIG.githubToken}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  });
-
-  if (!response.ok) {
-    let errorDetail = `GitHub API error: ${response.status} ${response.statusText}`;
+  // Robust fetch for contents list with automatic retry on transient failure
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const errBody = await response.json();
+      response = await fetch(contentsUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${VAULT_CONFIG.githubToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+      if (response.ok) break;
+      if (response.status === 403 || response.status === 429) {
+        // Rate limit hit - pause before retry
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    } catch (networkErr) {
+      if (attempt === 2) throw networkErr;
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+
+  if (!response || !response.ok) {
+    let errorDetail = `GitHub API error: ${response?.status ?? 'Unknown'} ${response?.statusText ?? ''}`;
+    try {
+      const errBody = await response?.json();
       if (errBody?.message) {
         errorDetail += ` - ${errBody.message}`;
       }
@@ -127,7 +141,7 @@ export async function fetchVaultPhotos(
     return null;
   }
 
-  // Run workers in parallel
+  // Run workers in parallel with controlled concurrency
   const workers = Array.from({ length: Math.min(CONCURRENCY_LIMIT, queue.length) }).map(async () => {
     while (queue.length > 0) {
       const task = queue.shift();
@@ -146,4 +160,64 @@ export async function fetchVaultPhotos(
   }
 
   return validPhotos;
+}
+
+/**
+ * Uploads a new photo to the GitHub vault repository.
+ * Converts the file to Base64 and commits it via the GitHub Contents API.
+ */
+export async function uploadVaultPhoto(file: File): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      try {
+        // Base64 data extraction
+        const result = reader.result as string;
+        const base64Data = result.includes(',') ? result.split(',')[1] : result;
+
+        // Clean filename (replace spaces with underscores and timestamp)
+        const cleanFileName = `memory_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+        const cleanFolderPath = VAULT_CONFIG.folderPath.replace(/^\/+|\/+$/g, '');
+        const uploadUrl = `https://api.github.com/repos/${VAULT_CONFIG.githubUsername}/${VAULT_CONFIG.repoName}/contents/${cleanFolderPath}/${cleanFileName}?ref=${VAULT_CONFIG.branch}`;
+
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${VAULT_CONFIG.githubToken}`,
+            Accept: 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: `Add memory: ${cleanFileName}`,
+            content: base64Data,
+            branch: VAULT_CONFIG.branch,
+          }),
+        });
+
+        if (!response.ok) {
+          let errorText = `Upload failed: ${response.status} ${response.statusText}`;
+          try {
+            const errJson = await response.json();
+            if (errJson?.message) errorText += ` - ${errJson.message}`;
+          } catch {
+            // ignore
+          }
+          throw new Error(errorText);
+        }
+
+        resolve(true);
+      } catch (error) {
+        console.error('Upload error:', error);
+        reject(error);
+      }
+    };
+
+    reader.onerror = (error) => {
+      console.error('FileReader error:', error);
+      reject(error);
+    };
+
+    reader.readAsDataURL(file);
+  });
 }

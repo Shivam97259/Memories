@@ -1,12 +1,13 @@
-import { X, Download, Heart } from 'lucide-react';
+import { X, Download, Heart, Lock } from 'lucide-react';
 import type { VaultPhoto } from '../api.ts';
 
 interface PhotoLightboxProps {
   photo: VaultPhoto | null;
   onClose: () => void;
+  onLock?: () => void;
 }
 
-export function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
+export function PhotoLightbox({ photo, onClose, onLock }: PhotoLightboxProps) {
   if (!photo) return null;
 
   const handleDownload = () => {
@@ -16,6 +17,13 @@ export function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const handlePanicLock = () => {
+    onClose();
+    if (onLock) {
+      onLock();
+    }
   };
 
   return (
@@ -48,6 +56,16 @@ export function PhotoLightbox({ photo, onClose }: PhotoLightboxProps) {
             >
               <Download className="w-3.5 h-3.5 text-rose-600" />
               <span>Save</span>
+            </button>
+
+            {/* Quick Panic Lock Button (🔒) */}
+            <button
+              onClick={handlePanicLock}
+              aria-label="Quick Lock Vault"
+              title="Instant Lock"
+              className="w-8 h-8 rounded-full bg-rose-50 hover:bg-rose-100 active:bg-rose-200 active:scale-90 border border-rose-200/80 text-[#E11D48] flex items-center justify-center transition-all cursor-pointer shadow-xs"
+            >
+              <Lock className="w-3.5 h-3.5" />
             </button>
 
             {/* Close Button */}

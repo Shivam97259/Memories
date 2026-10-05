@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   FolderArchive,
   RefreshCw,
@@ -15,13 +15,22 @@ import {
   Heart,
   Smartphone,
   LayoutGrid,
+  Plus,
+  Loader2,
+  X,
+  Sparkles,
 } from 'lucide-react';
-import { fetchVaultPhotos, type VaultPhoto } from './api.ts';
-import { VAULT_CONFIG } from './config.ts';
+import { fetchVaultPhotos, uploadVaultPhoto, type VaultPhoto } from './api';
+import { VAULT_CONFIG } from './config';
 import { LockScreen } from './components/LockScreen.tsx';
 import { VerticalFeed } from './components/VerticalFeed.tsx';
 import { GridView } from './components/GridView.tsx';
 import { PhotoLightbox } from './components/PhotoLightbox.tsx';
+
+interface ToastState {
+  text: string;
+  type: 'success' | 'error' | 'info';
+}
 
 export default function App() {
   const [photos, setPhotos] = useState<VaultPhoto[]>([]);
@@ -35,6 +44,25 @@ export default function App() {
   const [currentRoute, setCurrentRoute] = useState<string>(
     window.location.hash || window.location.pathname
   );
+
+  // Upload State
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<ToastState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Show auto-dismissing toast helper
+  const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage({ text, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  }, []);
 
   // Fetch photos on initial load
   const loadVaultPhotos = useCallback(async () => {
@@ -58,7 +86,9 @@ export default function App() {
     loadVaultPhotos();
   }, [loadVaultPhotos]);
 
-  // Privacy Shield: Auto-lock on visibilitychange and blur without resetting state
+  // Privacy Shield: Auto-lock on visibilitychange and blur temporarily disabled for testing/development
+  // Manual Panic Lock (🔒) remains active via handleLock
+  /*
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -78,6 +108,7 @@ export default function App() {
       window.removeEventListener('blur', handleBlur);
     };
   }, []);
+  */
 
   // Hash / Route listener for /admin support
   useEffect(() => {
@@ -99,11 +130,79 @@ export default function App() {
     setIsUnlocked(false);
   };
 
+  // Trigger file picker
+  const handleOpenFileDialog = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  // File chosen handler
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const preview = URL.createObjectURL(file);
+      setUploadFile(file);
+      setUploadPreviewUrl(preview);
+    }
+  };
+
+  // Cancel upload dialog
+  const handleCancelUpload = () => {
+    if (uploadPreviewUrl) {
+      URL.revokeObjectURL(uploadPreviewUrl);
+    }
+    setUploadFile(null);
+    setUploadPreviewUrl(null);
+  };
+
+  // Confirm and upload photo to GitHub
+  const handleConfirmUpload = async () => {
+    if (!uploadFile) return;
+
+    setIsUploading(true);
+    try {
+      await uploadVaultPhoto(uploadFile);
+      handleCancelUpload();
+      showToast('Memory saved forever! ✨', 'success');
+      // Auto-refresh vault photos immediately so new image appears in Feed & Grid
+      await loadVaultPhotos();
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+      showToast('Failed to upload. Please try again.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#F3EFEA] sm:bg-[#EAE4DC] flex justify-center items-stretch sm:items-center sm:py-6 select-none font-sans">
       {/* Strict Mobile-First Viewport Frame with Soft Ivory Chassis */}
       <div className="w-full max-w-md min-h-[100dvh] h-[100dvh] sm:min-h-[844px] sm:h-[844px] sm:max-h-[92vh] sm:rounded-[42px] sm:border-[9px] sm:border-white sm:ring-1 sm:ring-pink-200/50 bg-[#FAF7F2] shadow-2xl shadow-rose-950/10 relative overflow-hidden flex flex-col text-slate-800">
         
+        {/* Floating Feedback Toast */}
+        {toastMessage && (
+          <div
+            role="status"
+            className="absolute top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-white/95 backdrop-blur-md border border-rose-200 shadow-lg flex items-center gap-2 text-xs font-semibold text-slate-800 animate-in fade-in slide-in-from-top-3 duration-200 whitespace-nowrap"
+          >
+            {toastMessage.type === 'success' && <Sparkles className="w-4 h-4 text-rose-500" />}
+            {toastMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600" />}
+            <span>{toastMessage.text}</span>
+          </div>
+        )}
+
+        {/* Hidden File Input for Image Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+
         {/* Admin Route View */}
         {isAdminView ? (
           <div className="relative z-30 w-full h-full p-5 bg-[#FAF7F2] bg-gradient-to-b from-rose-50/80 via-pink-50/40 to-amber-50/20 flex flex-col justify-between overflow-y-auto no-scrollbar">
@@ -243,12 +342,20 @@ export default function App() {
                 <p className="text-xs text-slate-500">
                   No photos found in repository folder <code className="text-rose-600">/{VAULT_CONFIG.folderPath}</code>.
                 </p>
-                <button
-                  onClick={handleLock}
-                  className="mt-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
-                >
-                  Lock Vault
-                </button>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={handleOpenFileDialog}
+                    className="px-4 py-2 bg-gradient-to-r from-[#FF4D6D] to-[#E11D48] text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                  >
+                    Upload First Photo
+                  </button>
+                  <button
+                    onClick={handleLock}
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                  >
+                    Lock Vault
+                  </button>
+                </div>
               </div>
             ) : (
               /* Tabbed Architecture: Feed & Grid Remain Mounted in DOM Across Lock/Unlock */
@@ -280,6 +387,16 @@ export default function App() {
                       onLock={handleLock}
                     />
                   </div>
+
+                  {/* Floating Action Button (+): Soft romantic pastel rose theme neatly placed above navigation bar */}
+                  <button
+                    onClick={handleOpenFileDialog}
+                    aria-label="Upload New Memory"
+                    title="Add Memory"
+                    className="absolute bottom-4 right-4 z-30 w-12 h-12 flex items-center justify-center bg-rose-500 hover:bg-rose-600 active:scale-95 text-white shadow-lg shadow-rose-500/40 rounded-full transition-all cursor-pointer border border-white/40"
+                  >
+                    <Plus className="w-6 h-6 stroke-[2.5]" />
+                  </button>
                 </div>
 
                 {/* Fixed Sleek Frosted Bottom Navigation Bar */}
@@ -313,11 +430,92 @@ export default function App() {
                   </button>
                 </nav>
 
-                {/* Dedicated Lightbox Modal for Grid View */}
+                {/* Dedicated Lightbox Modal for Grid View with Panic Lock */}
                 <PhotoLightbox
                   photo={selectedPhoto}
                   onClose={() => setSelectedPhoto(null)}
+                  onLock={handleLock}
                 />
+
+                {/* Upload Preview & Confirmation Modal */}
+                {uploadFile && uploadPreviewUrl && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Upload Confirmation"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+                    onClick={() => !isUploading && handleCancelUpload()}
+                  >
+                    <div
+                      className="relative max-w-xs sm:max-w-sm w-full bg-white/95 backdrop-blur-xl rounded-3xl p-5 border border-rose-100 shadow-2xl text-slate-800 space-y-4 animate-in zoom-in-95 duration-150"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between pb-1 border-b border-rose-100/70">
+                        <div className="flex items-center gap-2">
+                          <Heart className="w-4 h-4 text-[#FF4D6D] fill-[#FF4D6D]" />
+                          <h3 className="text-sm font-bold text-slate-800 font-display">New Memory</h3>
+                        </div>
+                        {!isUploading && (
+                          <button
+                            onClick={handleCancelUpload}
+                            aria-label="Cancel Upload"
+                            className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Image Thumbnail Preview */}
+                      <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden bg-rose-50 border border-rose-100 flex items-center justify-center">
+                        <img
+                          src={uploadPreviewUrl}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      <div className="text-center px-1">
+                        <p className="text-xs font-semibold text-slate-700 truncate max-w-full">
+                          {uploadFile.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                          {(uploadFile.size / 1024).toFixed(0)} KB • Ready to commit to our vault
+                        </p>
+                      </div>
+
+                      {/* Confirm & Cancel Buttons */}
+                      <div className="flex flex-col gap-2 pt-1">
+                        <button
+                          onClick={handleConfirmUpload}
+                          disabled={isUploading}
+                          className="w-full py-2.5 px-4 bg-gradient-to-r from-[#FF4D6D] to-[#E11D48] hover:opacity-95 text-white rounded-xl text-xs font-semibold shadow-md shadow-rose-500/20 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                        >
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-white" />
+                              <span>Saving memory to vault... ⏳</span>
+                            </>
+                          ) : (
+                            <>
+                              <Heart className="w-3.5 h-3.5 fill-white text-white" />
+                              <span>Save Memory to Vault 💕</span>
+                            </>
+                          )}
+                        </button>
+
+                        {!isUploading && (
+                          <button
+                            onClick={handleCancelUpload}
+                            className="w-full py-2 px-3 text-slate-500 hover:text-slate-700 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
