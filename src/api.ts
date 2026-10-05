@@ -25,7 +25,7 @@ const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
  * Fetches vault photos from the GitHub repository.
  * Employs a concurrency-limited worker pool and exponential backoff retry to prevent
  * browser network socket exhaustion and GitHub secondary rate limiting ("Failed to fetch").
- * Optionally supports an onProgress callback to render photos progressively.
+ * Each returned VaultPhoto includes the GitHub commit SHA for accurate file operations.
  */
 export async function fetchVaultPhotos(
   onProgress?: (photos: VaultPhoto[]) => void
@@ -220,4 +220,66 @@ export async function uploadVaultPhoto(file: File): Promise<boolean> {
 
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Deletes a photo from the GitHub vault repository.
+ * Requires the file name and its GitHub file SHA. If the SHA is omitted,
+ * it fetches the latest commit SHA from the Contents API before deleting.
+ */
+export async function deleteVaultPhoto(fileName: string, fileSha?: string): Promise<boolean> {
+  const cleanFolderPath = VAULT_CONFIG.folderPath.replace(/^\/+|\/+$/g, '');
+  let shaToUse = fileSha;
+
+  // Retrieve SHA if not provided
+  if (!shaToUse) {
+    const getUrl = `https://api.github.com/repos/${VAULT_CONFIG.githubUsername}/${VAULT_CONFIG.repoName}/contents/${cleanFolderPath}/${encodeURIComponent(fileName)}?ref=${VAULT_CONFIG.branch}`;
+    const getRes = await fetch(getUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${VAULT_CONFIG.githubToken}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (getRes.ok) {
+      const data = await getRes.json();
+      shaToUse = data.sha;
+    }
+  }
+
+  if (!shaToUse) {
+    throw new Error(`Unable to resolve GitHub SHA for ${fileName}`);
+  }
+
+  const deleteUrl = `https://api.github.com/repos/${VAULT_CONFIG.githubUsername}/${VAULT_CONFIG.repoName}/contents/${cleanFolderPath}/${encodeURIComponent(fileName)}?ref=${VAULT_CONFIG.branch}`;
+
+  const response = await fetch(deleteUrl, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${VAULT_CONFIG.githubToken}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: `Delete memory: ${fileName}`,
+      sha: shaToUse,
+      branch: VAULT_CONFIG.branch,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorDetail = `Delete failed with status: ${response.status} ${response.statusText}`;
+    try {
+      const errBody = await response.json();
+      if (errBody?.message) {
+        errorDetail += ` - ${errBody.message}`;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+
+  return true;
 }

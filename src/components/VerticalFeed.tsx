@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Lock, MoreVertical, Download, Maximize2, Minimize2, X } from 'lucide-react';
+import { Lock, MoreVertical, Download, Maximize2, Minimize2, X, Trash2 } from 'lucide-react';
 import type { VaultPhoto } from '../api.ts';
 
 interface VerticalFeedProps {
   photos: VaultPhoto[];
   onLock: () => void;
+  onDeletePhoto?: (photo: VaultPhoto) => void;
 }
 
-export function VerticalFeed({ photos, onLock }: VerticalFeedProps) {
+export function VerticalFeed({ photos, onLock, onDeletePhoto }: VerticalFeedProps) {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -105,7 +106,7 @@ export function VerticalFeed({ photos, onLock }: VerticalFeedProps) {
         </button>
       </div>
 
-      {/* Sleek Frosted Popup Modal for Three Dots Menu (Grid option removed completely) */}
+      {/* Sleek Frosted Popup Modal for Three Dots Menu */}
       {isMenuOpen && (
         <div
           role="dialog"
@@ -154,6 +155,21 @@ export function VerticalFeed({ photos, onLock }: VerticalFeedProps) {
                   </>
                 )}
               </button>
+
+              {/* [🗑️] Delete Memory */}
+              {onDeletePhoto && photos[currentIndex] && (
+                <button
+                  onClick={() => {
+                    const target = photos[currentIndex];
+                    setIsMenuOpen(false);
+                    onDeletePhoto(target);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-red-50 text-xs font-medium text-red-600 hover:text-red-700 transition-colors cursor-pointer text-left border-t border-slate-100/80 mt-1"
+                >
+                  <Trash2 className="w-4 h-4 text-red-500" />
+                  <span>Delete Memory</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

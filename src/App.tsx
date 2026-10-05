@@ -19,8 +19,9 @@ import {
   Loader2,
   X,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
-import { fetchVaultPhotos, uploadVaultPhoto, type VaultPhoto } from './api';
+import { fetchVaultPhotos, uploadVaultPhoto, deleteVaultPhoto, type VaultPhoto } from './api';
 import { VAULT_CONFIG } from './config';
 import { LockScreen } from './components/LockScreen.tsx';
 import { VerticalFeed } from './components/VerticalFeed.tsx';
@@ -49,6 +50,12 @@ export default function App() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+
+  // Deletion State
+  const [photoToDelete, setPhotoToDelete] = useState<VaultPhoto | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Feedback Toast
   const [toastMessage, setToastMessage] = useState<ToastState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -177,6 +184,30 @@ export default function App() {
     }
   };
 
+  // Confirm and delete photo from GitHub
+  const handleConfirmDelete = async () => {
+    if (!photoToDelete) return;
+
+    setIsDeleting(true);
+    showToast('Removing memory... ⏳', 'info');
+
+    try {
+      await deleteVaultPhoto(photoToDelete.name, photoToDelete.sha);
+      // Remove photo from local state immediately so Feed & Grid update without a full re-fetch
+      setPhotos((prev) => prev.filter((p) => p.name !== photoToDelete.name));
+      if (selectedPhoto?.name === photoToDelete.name) {
+        setSelectedPhoto(null);
+      }
+      setPhotoToDelete(null);
+      showToast('Memory removed ✨', 'success');
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Failed to delete memory. Please try again.', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#F3EFEA] sm:bg-[#EAE4DC] flex justify-center items-stretch sm:items-center sm:py-6 select-none font-sans">
       {/* Strict Mobile-First Viewport Frame with Soft Ivory Chassis */}
@@ -190,6 +221,7 @@ export default function App() {
           >
             {toastMessage.type === 'success' && <Sparkles className="w-4 h-4 text-rose-500" />}
             {toastMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600" />}
+            {toastMessage.type === 'info' && <Loader2 className="w-4 h-4 text-rose-500 animate-spin" />}
             <span>{toastMessage.text}</span>
           </div>
         )}
@@ -253,7 +285,7 @@ export default function App() {
                   </div>
                   <div className="flex justify-between py-1">
                     <dt className="text-slate-400">Passcode</dt>
-                    <dd className="font-mono text-rose-600 font-semibold">29082026</dd>
+                    <dd className="font-mono text-rose-600 font-semibold">17092024</dd>
                   </div>
                 </dl>
               </div>
@@ -370,7 +402,11 @@ export default function App() {
                         : 'opacity-0 pointer-events-none z-0'
                     }`}
                   >
-                    <VerticalFeed photos={photos} onLock={handleLock} />
+                    <VerticalFeed
+                      photos={photos}
+                      onLock={handleLock}
+                      onDeletePhoto={(photo) => setPhotoToDelete(photo)}
+                    />
                   </div>
 
                   {/* Tab 2: 2-Column Gallery Grid */}
@@ -430,11 +466,12 @@ export default function App() {
                   </button>
                 </nav>
 
-                {/* Dedicated Lightbox Modal for Grid View with Panic Lock */}
+                {/* Dedicated Lightbox Modal for Grid View with Panic Lock & Delete */}
                 <PhotoLightbox
                   photo={selectedPhoto}
                   onClose={() => setSelectedPhoto(null)}
                   onLock={handleLock}
+                  onDelete={(photo) => setPhotoToDelete(photo)}
                 />
 
                 {/* Upload Preview & Confirmation Modal */}
@@ -507,6 +544,77 @@ export default function App() {
                         {!isUploading && (
                           <button
                             onClick={handleCancelUpload}
+                            className="w-full py-2 px-3 text-slate-500 hover:text-slate-700 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {photoToDelete && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Confirm Delete Memory"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-150"
+                    onClick={() => !isDeleting && setPhotoToDelete(null)}
+                  >
+                    <div
+                      className="relative max-w-xs sm:max-w-sm w-full bg-white/95 backdrop-blur-xl rounded-3xl p-5 border border-rose-100 shadow-2xl text-slate-800 text-center space-y-4 animate-in zoom-in-95 duration-150"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 mx-auto flex items-center justify-center border border-red-100/80 shadow-xs">
+                        <Trash2 className="w-5 h-5 text-red-500" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-bold text-slate-800 font-display">Delete Memory</h3>
+                        <p className="text-xs text-slate-600 leading-relaxed px-1">
+                          Are you sure you want to remove this memory from the vault? 💕
+                        </p>
+                      </div>
+
+                      {photoToDelete.url && (
+                        <div className="w-24 h-24 mx-auto rounded-xl overflow-hidden border border-rose-100 bg-rose-50 shadow-inner">
+                          <img
+                            src={photoToDelete.url}
+                            alt={photoToDelete.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+
+                      <p className="text-[11px] font-mono text-slate-400 truncate max-w-full px-2">
+                        {photoToDelete.name}
+                      </p>
+
+                      {/* Action Buttons: [Cancel] & [Yes, Delete] (red button) */}
+                      <div className="flex flex-col gap-2 pt-1">
+                        <button
+                          onClick={handleConfirmDelete}
+                          disabled={isDeleting}
+                          className="w-full py-2.5 px-4 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-red-500/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                        >
+                          {isDeleting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-white" />
+                              <span>Removing memory... ⏳</span>
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="w-3.5 h-3.5 text-white" />
+                              <span>Yes, Delete</span>
+                            </>
+                          )}
+                        </button>
+
+                        {!isDeleting && (
+                          <button
+                            onClick={() => setPhotoToDelete(null)}
                             className="w-full py-2 px-3 text-slate-500 hover:text-slate-700 text-xs font-medium transition-colors cursor-pointer"
                           >
                             Cancel

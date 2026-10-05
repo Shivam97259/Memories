@@ -1,13 +1,14 @@
-import { X, Download, Heart, Lock } from 'lucide-react';
+import { X, Download, Heart, Lock, Trash2 } from 'lucide-react';
 import type { VaultPhoto } from '../api.ts';
 
 interface PhotoLightboxProps {
   photo: VaultPhoto | null;
   onClose: () => void;
   onLock?: () => void;
+  onDelete?: (photo: VaultPhoto) => void;
 }
 
-export function PhotoLightbox({ photo, onClose, onLock }: PhotoLightboxProps) {
+export function PhotoLightbox({ photo, onClose, onLock, onDelete }: PhotoLightboxProps) {
   if (!photo) return null;
 
   const handleDownload = () => {
@@ -47,7 +48,7 @@ export function PhotoLightbox({ photo, onClose, onLock }: PhotoLightboxProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Download Button */}
             <button
               onClick={handleDownload}
@@ -57,6 +58,19 @@ export function PhotoLightbox({ photo, onClose, onLock }: PhotoLightboxProps) {
               <Download className="w-3.5 h-3.5 text-rose-600" />
               <span>Save</span>
             </button>
+
+            {/* Delete Button (🗑️): Soft rose/red accent next to Save button */}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(photo)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 hover:text-red-700 text-xs font-medium transition-colors cursor-pointer border border-rose-200/60"
+                title="Delete Memory"
+                aria-label="Delete Memory"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                <span>Delete</span>
+              </button>
+            )}
 
             {/* Quick Panic Lock Button (🔒) */}
             <button

@@ -6,7 +6,7 @@ interface LockScreenProps {
 }
 
 const PASSCODE_LENGTH = 8;
-const SECRET_PASSCODE = '29082026';
+const SECRET_PASSCODE = '17092024';
 
 export function LockScreen({ onUnlock }: LockScreenProps) {
   const [pin, setPin] = useState<string>('');
@@ -94,7 +94,7 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
       {showHintToast && (
         <div className="absolute top-16 left-6 right-6 z-30 mx-auto max-w-xs animate-bounce duration-300 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-xl border border-rose-200 shadow-xl shadow-rose-900/10 text-xs sm:text-sm font-medium text-rose-800 flex items-center justify-center gap-2 text-center">
           <Heart className="w-4 h-4 text-[#FF4D6D] fill-[#FF4D6D] shrink-0" />
-          <span>The day we first met... 💕 (DDMMYYYY)</span>
+          <span>The day our story began... 💕 (DDMMYYYY)</span>
         </div>
       )}
 
