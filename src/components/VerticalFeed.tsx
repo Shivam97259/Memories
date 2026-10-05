@@ -1,36 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { Lock, MoreVertical, Download, LayoutGrid, Maximize2, Minimize2, X } from 'lucide-react';
+import { Lock, MoreVertical, Download, Maximize2, Minimize2, X } from 'lucide-react';
 import type { VaultPhoto } from '../api.ts';
 
 interface VerticalFeedProps {
   photos: VaultPhoto[];
-  initialIndex?: number;
   onLock: () => void;
-  onSwitchToGrid: (currentIndex: number) => void;
 }
 
-export function VerticalFeed({
-  photos,
-  initialIndex = 0,
-  onLock,
-  onSwitchToGrid,
-}: VerticalFeedProps) {
-  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
+export function VerticalFeed({ photos, onLock }: VerticalFeedProps) {
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const feedContainerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  // Scroll to initial index on mount
-  useEffect(() => {
-    if (photos.length > 0 && initialIndex >= 0 && initialIndex < photos.length) {
-      const targetElement = itemRefs.current[initialIndex];
-      if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'auto' });
-        setCurrentIndex(initialIndex);
-      }
-    }
-  }, [initialIndex, photos.length]);
 
   // Fullscreen state observer
   useEffect(() => {
@@ -99,10 +81,10 @@ export function VerticalFeed({
   };
 
   return (
-    <div className="relative w-full h-full min-h-[100dvh] sm:min-h-full overflow-hidden bg-black select-none">
+    <div className="relative w-full h-full overflow-hidden bg-black select-none">
       {/* High-Contrast Controls in Top-Right */}
       <div className="absolute top-4 right-4 z-40 flex items-center gap-2.5">
-        {/* Quick Lock Button (🔒): Frosted semi-transparent circle button placed directly to the left of 3-dots */}
+        {/* Panic Lock Button (🔒): Frosted semi-transparent circle button placed directly to the left of 3-dots */}
         <button
           onClick={onLock}
           aria-label="Quick Lock Vault"
@@ -123,7 +105,7 @@ export function VerticalFeed({
         </button>
       </div>
 
-      {/* Sleek Frosted Popup Modal for Three Dots Menu */}
+      {/* Sleek Frosted Popup Modal for Three Dots Menu (Grid option removed completely) */}
       {isMenuOpen && (
         <div
           role="dialog"
@@ -132,39 +114,27 @@ export function VerticalFeed({
           onClick={() => setIsMenuOpen(false)}
         >
           <div
-            className="mt-12 w-56 rounded-2xl bg-white/95 backdrop-blur-xl border border-rose-100/80 p-2 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150"
+            className="mt-12 w-52 rounded-2xl bg-white/95 backdrop-blur-xl border border-rose-100/80 p-2 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 text-xs font-semibold text-slate-500">
               <span>Memory Options</span>
               <button
                 onClick={() => setIsMenuOpen(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-600"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <div className="py-1 space-y-0.5">
-              {/* [📥] Download Memory */}
+              {/* [📥] Download Active Photo */}
               <button
                 onClick={handleDownloadCurrent}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-50 text-xs font-medium text-slate-700 hover:text-rose-700 transition-colors cursor-pointer text-left"
               >
                 <Download className="w-4 h-4 text-rose-500" />
-                <span>Download Memory</span>
-              </button>
-
-              {/* [▦] Grid View */}
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  onSwitchToGrid(currentIndex);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-50 text-xs font-medium text-slate-700 hover:text-rose-700 transition-colors cursor-pointer text-left"
-              >
-                <LayoutGrid className="w-4 h-4 text-rose-500" />
-                <span>Grid View</span>
+                <span>Download Active Photo</span>
               </button>
 
               {/* [⛶] Fullscreen Toggle */}
@@ -189,7 +159,7 @@ export function VerticalFeed({
         </div>
       )}
 
-      {/* Instagram Reels-Style Vertical Feed: Edge-to-edge full-bleed snap scrolling inside mobile frame */}
+      {/* Instagram Reels-Style Vertical Feed: Edge-to-edge full-bleed snap scrolling */}
       <div
         ref={feedContainerRef}
         className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar scroll-smooth"
@@ -201,7 +171,7 @@ export function VerticalFeed({
               itemRefs.current[index] = el;
             }}
             data-index={index}
-            className="w-full h-full min-h-[100dvh] sm:min-h-full snap-start snap-always relative flex items-center justify-center bg-black overflow-hidden"
+            className="w-full h-full snap-start snap-always relative flex items-center justify-center bg-black overflow-hidden"
           >
             {/* Ambient subtle blurred backdrop for cinematic warmth */}
             <div

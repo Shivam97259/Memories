@@ -7,32 +7,31 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   FolderArchive,
   RefreshCw,
-  Lock,
-  Sparkles,
   AlertCircle,
   HardDrive,
   Github,
   Shield,
   ArrowLeft,
   Heart,
+  Smartphone,
+  LayoutGrid,
 } from 'lucide-react';
 import { fetchVaultPhotos, type VaultPhoto } from './api.ts';
 import { VAULT_CONFIG } from './config.ts';
 import { LockScreen } from './components/LockScreen.tsx';
 import { VerticalFeed } from './components/VerticalFeed.tsx';
 import { GridView } from './components/GridView.tsx';
-import { AdminUnlockModal } from './components/AdminUnlockModal.tsx';
+import { PhotoLightbox } from './components/PhotoLightbox.tsx';
 
 export default function App() {
   const [photos, setPhotos] = useState<VaultPhoto[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Security & Navigation State
+  // Security & Navigation State (Preserved across lock cycles)
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
-  const [currentFeedIndex, setCurrentFeedIndex] = useState<number>(0);
-  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'feed' | 'grid'>('feed');
+  const [selectedPhoto, setSelectedPhoto] = useState<VaultPhoto | null>(null);
   const [currentRoute, setCurrentRoute] = useState<string>(
     window.location.hash || window.location.pathname
   );
@@ -42,7 +41,9 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchVaultPhotos();
+      const data = await fetchVaultPhotos((partial) => {
+        setPhotos(partial);
+      });
       setPhotos(data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unable to connect to vault repository.';
@@ -57,7 +58,7 @@ export default function App() {
     loadVaultPhotos();
   }, [loadVaultPhotos]);
 
-  // Privacy Shield: Auto-lock on visibilitychange and blur
+  // Privacy Shield: Auto-lock on visibilitychange and blur without resetting state
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -98,21 +99,9 @@ export default function App() {
     setIsUnlocked(false);
   };
 
-  // Switch to Grid View
-  const handleSwitchToGrid = (index: number) => {
-    setCurrentFeedIndex(index);
-    setViewMode('grid');
-  };
-
-  // Select photo from Grid to open at exact photo index in Vertical Feed
-  const handleSelectFromGrid = (index: number) => {
-    setCurrentFeedIndex(index);
-    setViewMode('feed');
-  };
-
   return (
     <div className="min-h-screen w-full bg-[#F3EFEA] sm:bg-[#EAE4DC] flex justify-center items-stretch sm:items-center sm:py-6 select-none font-sans">
-      {/* Strict Mobile-First Viewport Frame with Soft Ivory/White Chassis */}
+      {/* Strict Mobile-First Viewport Frame with Soft Ivory Chassis */}
       <div className="w-full max-w-md min-h-[100dvh] h-[100dvh] sm:min-h-[844px] sm:h-[844px] sm:max-h-[92vh] sm:rounded-[42px] sm:border-[9px] sm:border-white sm:ring-1 sm:ring-pink-200/50 bg-[#FAF7F2] shadow-2xl shadow-rose-950/10 relative overflow-hidden flex flex-col text-slate-800">
         
         {/* Admin Route View */}
@@ -203,93 +192,143 @@ export default function App() {
               </button>
             </div>
           </div>
-        ) : !isUnlocked ? (
-          /* Lock Screen with Clean Romantic Pastel Aesthetics & No Admin Backdoor */
-          <LockScreen
-            onUnlock={() => setIsUnlocked(true)}
-          />
-        ) : isLoading && photos.length === 0 ? (
-          /* Loading Screen */
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] bg-gradient-to-b from-rose-50/90 to-amber-50/30 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full border-3 border-rose-200 border-t-[#FF4D6D] animate-spin flex items-center justify-center shadow-xs">
-              <Heart className="w-5 h-5 text-[#FF4D6D] fill-[#FF4D6D]/40" />
-            </div>
-            <div>
-              <h3 className="font-display text-base font-bold text-slate-800">Opening Our Vault</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Retrieving cherished memories...
-              </p>
-            </div>
-          </div>
-        ) : error && photos.length === 0 ? (
-          /* Error Screen */
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="max-w-xs">
-              <h3 className="text-sm font-bold text-slate-800">Connection Error</h3>
-              <p className="text-xs text-rose-600 mt-1 font-mono break-all">{error}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={loadVaultPhotos}
-                className="px-4 py-2 bg-gradient-to-r from-[#FF4D6D] to-[#E11D48] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-              >
-                Retry
-              </button>
-              <button
-                onClick={handleLock}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium shadow-xs transition-colors cursor-pointer"
-              >
-                Lock Vault
-              </button>
-            </div>
-          </div>
-        ) : photos.length === 0 ? (
-          /* Empty Vault Screen */
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center">
-              <FolderArchive className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-800">Vault is Empty</h3>
-            <p className="text-xs text-slate-500">
-              No photos found in repository folder <code className="text-rose-600">/{VAULT_CONFIG.folderPath}</code>.
-            </p>
-            <button
-              onClick={handleLock}
-              className="mt-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
-            >
-              Lock Vault
-            </button>
-          </div>
-        ) : viewMode === 'feed' ? (
-          /* Instagram Reels-Style Vertical Feed: Edge-to-edge full-bleed snap scrolling inside mobile frame */
-          <VerticalFeed
-            photos={photos}
-            initialIndex={currentFeedIndex}
-            onLock={handleLock}
-            onSwitchToGrid={handleSwitchToGrid}
-          />
         ) : (
-          /* 2-Column Grid View */
-          <GridView
-            photos={photos}
-            onSelectPhoto={handleSelectFromGrid}
-            onBackToFeed={() => setViewMode('feed')}
-            onLock={handleLock}
-          />
-        )}
+          /* Main Application Container: Kept permanently mounted to preserve active photo & scroll states */
+          <div className="w-full h-full flex flex-col overflow-hidden relative">
+            {isLoading && photos.length === 0 ? (
+              /* Loading State */
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] bg-gradient-to-b from-rose-50/90 to-amber-50/30 text-center space-y-4">
+                <div className="w-14 h-14 rounded-full border-3 border-rose-200 border-t-[#FF4D6D] animate-spin flex items-center justify-center shadow-xs">
+                  <Heart className="w-5 h-5 text-[#FF4D6D] fill-[#FF4D6D]/40" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-slate-800">Opening Our Vault</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Retrieving cherished memories...
+                  </p>
+                </div>
+              </div>
+            ) : error && photos.length === 0 ? (
+              /* Error State */
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div className="max-w-xs">
+                  <h3 className="text-sm font-bold text-slate-800">Connection Error</h3>
+                  <p className="text-xs text-rose-600 mt-1 font-mono break-all">{error}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadVaultPhotos}
+                    className="px-4 py-2 bg-gradient-to-r from-[#FF4D6D] to-[#E11D48] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={handleLock}
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium shadow-xs transition-colors cursor-pointer"
+                  >
+                    Lock Vault
+                  </button>
+                </div>
+              </div>
+            ) : photos.length === 0 ? (
+              /* Empty Vault State */
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#FAF7F2] text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center">
+                  <FolderArchive className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">Vault is Empty</h3>
+                <p className="text-xs text-slate-500">
+                  No photos found in repository folder <code className="text-rose-600">/{VAULT_CONFIG.folderPath}</code>.
+                </p>
+                <button
+                  onClick={handleLock}
+                  className="mt-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  Lock Vault
+                </button>
+              </div>
+            ) : (
+              /* Tabbed Architecture: Feed & Grid Remain Mounted in DOM Across Lock/Unlock */
+              <div className="w-full h-full flex flex-col overflow-hidden relative">
+                {/* View Container with Isolated DOMs (Scroll offsets remain 100% frozen when locked) */}
+                <div className="flex-1 relative w-full h-[calc(100%-3.5rem)] overflow-hidden">
+                  {/* Tab 1: Vertical Snap Feed */}
+                  <div
+                    className={`absolute inset-0 transition-opacity duration-150 ${
+                      activeTab === 'feed'
+                        ? 'opacity-100 pointer-events-auto z-10'
+                        : 'opacity-0 pointer-events-none z-0'
+                    }`}
+                  >
+                    <VerticalFeed photos={photos} onLock={handleLock} />
+                  </div>
 
-        {/* Admin Unlock Modal */}
-        <AdminUnlockModal
-          isOpen={isAdminModalOpen}
-          onClose={() => setIsAdminModalOpen(false)}
-          onUnlockSuccess={() => {
-            window.location.hash = '/admin';
-            setCurrentRoute('#/admin');
-          }}
-        />
+                  {/* Tab 2: 2-Column Gallery Grid */}
+                  <div
+                    className={`absolute inset-0 transition-opacity duration-150 ${
+                      activeTab === 'grid'
+                        ? 'opacity-100 pointer-events-auto z-10'
+                        : 'opacity-0 pointer-events-none z-0'
+                    }`}
+                  >
+                    <GridView
+                      photos={photos}
+                      onSelectPhoto={(photo) => setSelectedPhoto(photo)}
+                      onLock={handleLock}
+                    />
+                  </div>
+                </div>
+
+                {/* Fixed Sleek Frosted Bottom Navigation Bar */}
+                <nav className="h-14 w-full bg-white/80 backdrop-blur-md border-t border-pink-100 py-2 px-6 flex justify-around items-center z-40 select-none shrink-0 shadow-xs">
+                  {/* Tab 1: [📱 Feed] */}
+                  <button
+                    onClick={() => setActiveTab('feed')}
+                    aria-label="Feed Tab"
+                    className={`flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer ${
+                      activeTab === 'feed'
+                        ? 'text-rose-600 font-bold'
+                        : 'text-gray-400 hover:text-gray-600 font-medium'
+                    }`}
+                  >
+                    <Smartphone className="w-5 h-5" />
+                    <span className="text-[11px]">Feed</span>
+                  </button>
+
+                  {/* Tab 2: [▦ Grid] */}
+                  <button
+                    onClick={() => setActiveTab('grid')}
+                    aria-label="Grid Tab"
+                    className={`flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer ${
+                      activeTab === 'grid'
+                        ? 'text-rose-600 font-bold'
+                        : 'text-gray-400 hover:text-gray-600 font-medium'
+                    }`}
+                  >
+                    <LayoutGrid className="w-5 h-5" />
+                    <span className="text-[11px]">Grid</span>
+                  </button>
+                </nav>
+
+                {/* Dedicated Lightbox Modal for Grid View */}
+                <PhotoLightbox
+                  photo={selectedPhoto}
+                  onClose={() => setSelectedPhoto(null)}
+                />
+              </div>
+            )}
+
+            {/* Lock Screen Overlay: Full-bleed overlay that does NOT unmount the underlying Feed or Grid */}
+            {!isUnlocked && (
+              <div className="absolute inset-0 z-50 w-full h-full bg-[#FAF7F2] animate-in fade-in duration-200">
+                <LockScreen onUnlock={() => setIsUnlocked(true)} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
