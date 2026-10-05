@@ -1,0 +1,6 @@
+{
+  "name": "Our Little Vault",
+  "description": "A deep space 3D portfolio and vault gallery showcasing curated memories and visuals against a cosmological starfield canvas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
